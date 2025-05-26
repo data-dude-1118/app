@@ -1,5 +1,5 @@
 streamlit
---upgrade yfinance
+yfinance
 pandas
 matplotlib
 scikit-learn
