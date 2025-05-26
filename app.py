@@ -8,13 +8,12 @@ from sklearn.linear_model import LinearRegression
 import datetime
 
 st.set_page_config(page_title="Hisse Sinyal Takibi", layout="wide")
-
 st.title("📊 Hisse Sinyal Takibi: EMA, RSI, Regresyon Kanalı, Anomali")
 
-# --- Kullanıcıdan hisse kodu al
+# Kullanıcıdan hisse kodu al
 symbol = st.text_input("Hisse kodu (örn: XU100.IS)", value="XU100.IS").upper()
 
-# --- RSI Hesabı
+# RSI hesaplama
 def compute_rsi(series, period=14):
     delta = series.diff()
     gain = delta.clip(lower=0)
@@ -24,7 +23,7 @@ def compute_rsi(series, period=14):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-# --- Sinyal Hesaplama
+# Sinyal hesaplama
 def compute_signals(df):
     try:
         price = df['Close'].iloc[-1]
@@ -38,7 +37,7 @@ def compute_signals(df):
     except:
         return "NO", "NO"
 
-# --- Veri Çekme (cache ile 1 dk güncelleme)
+# Veri çekme (1 dakikalık veriler)
 @st.cache_data(ttl=60)
 def fetch_data(symbol):
     df = yf.download(symbol, period="1d", interval="1m", progress=False)
@@ -48,17 +47,17 @@ def fetch_data(symbol):
     df['RSI_EMA9'] = df['RSI'].ewm(span=9, adjust=False).mean()
     return df.dropna()
 
-# --- Çizim
+# Ana çizim işlemi
 if symbol:
     try:
         df = fetch_data(symbol)
 
-        # --- Anomaly Detection
+        # Anomali tespiti
         iso = IsolationForest(contamination=0.10, random_state=42)
         df['anomaly'] = iso.fit_predict(df[['Close']])
         anomalies = df[df['anomaly'] == -1]
 
-        # --- Linear Regression Channel
+        # Regresyon Kanalı
         df['index_num'] = (df.index - df.index[0]).total_seconds()
         X = df['index_num'].values.reshape(-1, 1)
         y = df['Close'].values.reshape(-1, 1)
@@ -68,14 +67,13 @@ if symbol:
         upper = trend + 1.5 * std
         lower = trend - 1.5 * std
 
-        # --- Sinyal Bilgileri
         ema_signal, rsi_signal = compute_signals(df)
 
-        # --- GRAFİK
+        # Grafik
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
 
-        # Fiyat + EMA + Anomali + Trend
-        ax1.plot(df.index, df['Close'], label='Close (1m)', color='blue', linewidth=1)
+        # Fiyatlar ve EMA
+        ax1.plot(df.index, df['Close'], label='Close (1m)', color='blue')
         ax1.plot(df.index, df['EMA21'], label='EMA21', linestyle='--', color='purple')
         ax1.plot(df.index, trend, label='Trend', color='black')
         ax1.plot(df.index, upper, label='+1.5σ', linestyle='--', color='green')
@@ -83,11 +81,11 @@ if symbol:
         ax1.scatter(anomalies.index, anomalies['Close'], color='orange', alpha=0.4, label='Anomali', zorder=5)
 
         ax1.set_ylabel("Fiyat")
-        ax1.set_title(f"{symbol} - EMA, Anomali ve Regresyon Kanalı")
-        ax1.legend()
+        ax1.set_title(f"{symbol} - EMA21, RSI, Regresyon Kanalı ve Anomaliler")
         ax1.grid(True)
+        ax1.legend()
 
-        # RSI
+        # RSI Grafiği
         ax2.plot(df.index, df['RSI'], label='RSI(14)', color='blue')
         ax2.plot(df.index, df['RSI_EMA9'], label='RSI EMA9', color='orange', linestyle='--')
         ax2.axhline(70, color='red', linestyle='--')
@@ -100,13 +98,14 @@ if symbol:
 
         st.pyplot(fig)
 
-        # --- Sinyaller
+        # Sinyaller
         st.markdown(f"### 🔔 EMA Sinyali: {'🟢 AL' if ema_signal == 'AL' else '🔴 SAT'}")
         st.markdown(f"### 📶 RSI Sinyali: {'🟢 AL' if rsi_signal == 'AL' else '🔴 SAT'}")
 
-        st.caption("📡 Her 1 dakikada bir otomatik yenilenir.")
+        st.caption("📡 Bu uygulama her 60 saniyede bir otomatik olarak güncellenir.")
     except Exception as e:
-        st.error(f"Hata oluştu: {e}")
+        st.error(f"❌ Hata oluştu: {e}")
+
 
 
 
