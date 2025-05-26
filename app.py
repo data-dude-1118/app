@@ -13,12 +13,13 @@ symbol = st.text_input("Hisse kodu giriniz (örn: XU100.IS)", value="XU100.IS")
 
 @st.cache_data(ttl=60)
 def fetch_data(ticker):
-    df = yf.download(ticker, period="1d", interval="1m", progress=False)
+    df = yf.download(ticker, period="1d", interval="1m", progress=False, auto_adjust=True)
     if df.empty:
         return None
     df = df[['Close', 'Volume']].dropna()
     df.index = pd.to_datetime(df.index)
     df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
+
     delta = df['Close'].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -27,8 +28,10 @@ def fetch_data(ticker):
     rs = avg_gain / avg_loss
     df['RSI'] = 100 - (100 / (1 + rs))
     df['RSI_EMA9'] = df['RSI'].ewm(span=9, adjust=False).mean()
+
     iso = IsolationForest(contamination=0.10, random_state=42)
     df['anomaly'] = iso.fit_predict(df[['Close']])
+
     df = df.dropna(subset=['Close', 'EMA21', 'RSI', 'RSI_EMA9'])
     return df
 
@@ -40,10 +43,10 @@ if df is None or df.empty:
 
 # Güvenli değer çekimi
 try:
-    close = float(df['Close'].iloc[-1])
-    ema21 = float(df['EMA21'].iloc[-1])
-    rsi = float(df['RSI'].iloc[-1])
-    rsi_ema9 = float(df['RSI_EMA9'].iloc[-1])
+    close = df['Close'].iloc[-1].item()
+    ema21 = df['EMA21'].iloc[-1].item()
+    rsi = df['RSI'].iloc[-1].item()
+    rsi_ema9 = df['RSI_EMA9'].iloc[-1].item()
 except Exception as e:
     st.error(f"Veri okunurken hata oluştu: {e}")
     st.stop()
@@ -101,6 +104,7 @@ ax2.text(0.99, 0.95, f"RSI Sinyali: {rsi_signal}", transform=ax2.transAxes,
          bbox=dict(facecolor='green' if rsi_signal == 'AL' else 'red', alpha=0.5))
 
 st.pyplot(fig)
+
 
 
 
