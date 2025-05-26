@@ -8,7 +8,6 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(layout="wide")
 st.title("📈 Hisse Sinyal Takibi: EMA, RSI, Anomali & Regresyon")
 
-# Kullanıcıdan hisse kodu al
 symbol = st.text_input("Hisse kodu giriniz (örn: XU100.IS)", value="XU100.IS")
 
 @st.cache_data(ttl=60)
@@ -33,54 +32,72 @@ def fetch_data(ticker):
 
 df = fetch_data(symbol)
 
-if df is None:
-    st.warning("Veri çekilemedi veya uygun değil.")
-else:
-    ema_signal = "AL" if df['Close'].iloc[-1] < df['EMA21'].iloc[-1] else "SAT"
-    rsi_signal = "AL" if df['RSI'].iloc[-1] < df['RSI_EMA9'].iloc[-1] else "SAT"
+if df is None or df[['Close', 'EMA21', 'RSI', 'RSI_EMA9']].dropna().empty:
+    st.warning("Yeterli veri yok veya EMA/RSI hesaplanamıyor. Lütfen farklı bir hisse deneyin.")
+    st.stop()
 
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+# Sinyal hesaplama (güvenli)
+close = df['Close'].iloc[-1]
+ema21 = df['EMA21'].iloc[-1]
+rsi = df['RSI'].iloc[-1]
+rsi_ema9 = df['RSI_EMA9'].iloc[-1]
 
-    # Fiyat grafiği
-    ax1.plot(df.index, df['Close'], label="Close", linewidth=1)
-    ax1.plot(df.index, df['EMA21'], label="EMA21", linestyle="--", linewidth=1.5)
-    anomalies = df[df['anomaly'] == -1]
-    ax1.scatter(anomalies.index, anomalies['Close'], color='orange', alpha=0.3, label='Anomaly')
+ema_signal = "NO"
+rsi_signal = "NO"
 
-    try:
-        df['index_num'] = (df.index - df.index[0]).total_seconds().astype(float)
-        X = df['index_num'].values.reshape(-1, 1)
-        y = df['Close'].values.reshape(-1, 1)
-        model = LinearRegression().fit(X, y)
-        trend = model.predict(X).flatten()
-        residuals = y.flatten() - trend
-        std = residuals.std()
-        upper = trend + 1.5 * std
-        lower = trend - 1.5 * std
-        ax1.plot(df.index, trend, color='blue', linestyle='-', label='Trend Line')
-        ax1.plot(df.index, upper, color='blue', linestyle='--', label='+1.5σ')
-        ax1.plot(df.index, lower, color='blue', linestyle='--', label='-1.5σ')
-    except Exception as e:
-        st.error(f"Regresyon hatası: {e}")
+if pd.notna(close) and pd.notna(ema21):
+    ema_signal = "AL" if close < ema21 else "SAT"
 
-    ax1.set_ylabel("Fiyat")
-    ax1.set_title(f"{symbol} - EMA21, Anomaliler ve Regresyon")
-    ax1.legend()
-    ax1.grid(True)
-    ax1.text(0.99, 0.95, f"EMA Sinyali: {ema_signal}", transform=ax1.transAxes, 
-             fontsize=12, ha='right', va='top', bbox=dict(facecolor='green' if ema_signal=='AL' else 'red', alpha=0.5))
+if pd.notna(rsi) and pd.notna(rsi_ema9):
+    rsi_signal = "AL" if rsi < rsi_ema9 else "SAT"
 
-    # RSI grafiği
-    ax2.plot(df.index, df['RSI'], label="RSI(14)", color="purple")
-    ax2.plot(df.index, df['RSI_EMA9'], label="RSI EMA9", color="orange", linestyle="--")
-    ax2.axhline(70, color="red", linestyle="--")
-    ax2.axhline(30, color="green", linestyle="--")
-    ax2.set_ylim(0, 100)
-    ax2.set_ylabel("RSI")
-    ax2.set_title("RSI ve EMA9")
-    ax2.legend()
-    ax2.grid(True)
-    ax2.text(0.99, 0.95, f"RSI Sinyali: {rsi_signal}", transform=ax2.transAxes, 
-             fontsize=12, ha='right', va='top', bbox=dict(facecolor='green' if rsi_signal=='AL' else 'red', alpha=0.5))
+# Grafik çizimi
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
 
-    st.pyplot(fig)
+# Fiyat grafiği
+ax1.plot(df.index, df['Close'], label="Close", linewidth=1)
+ax1.plot(df.index, df['EMA21'], label="EMA21", linestyle="--", linewidth=1.5)
+anomalies = df[df['anomaly'] == -1]
+ax1.scatter(anomalies.index, anomalies['Close'], color='orange', alpha=0.3, label='Anomaly')
+
+# Regresyon çizgisi
+try:
+    df['index_num'] = (df.index - df.index[0]).total_seconds().astype(float)
+    X = df['index_num'].values.reshape(-1, 1)
+    y = df['Close'].values.reshape(-1, 1)
+    model = LinearRegression().fit(X, y)
+    trend = model.predict(X).flatten()
+    residuals = y.flatten() - trend
+    std = residuals.std()
+    upper = trend + 1.5 * std
+    lower = trend - 1.5 * std
+    ax1.plot(df.index, trend, color='blue', linestyle='-', label='Trend Line')
+    ax1.plot(df.index, upper, color='blue', linestyle='--', label='+1.5σ')
+    ax1.plot(df.index, lower, color='blue', linestyle='--', label='-1.5σ')
+except Exception as e:
+    st.error(f"Regresyon hatası: {e}")
+
+ax1.set_ylabel("Fiyat")
+ax1.set_title(f"{symbol} - EMA21, Anomaliler ve Regresyon")
+ax1.legend()
+ax1.grid(True)
+ax1.text(0.99, 0.95, f"EMA Sinyali: {ema_signal}", transform=ax1.transAxes,
+         fontsize=12, ha='right', va='top',
+         bbox=dict(facecolor='green' if ema_signal == 'AL' else 'red' if ema_signal == 'SAT' else 'gray', alpha=0.5))
+
+# RSI grafiği
+ax2.plot(df.index, df['RSI'], label="RSI(14)", color="purple")
+ax2.plot(df.index, df['RSI_EMA9'], label="RSI EMA9", color="orange", linestyle="--")
+ax2.axhline(70, color="red", linestyle="--")
+ax2.axhline(30, color="green", linestyle="--")
+ax2.set_ylim(0, 100)
+ax2.set_ylabel("RSI")
+ax2.set_title("RSI ve EMA9")
+ax2.legend()
+ax2.grid(True)
+ax2.text(0.99, 0.95, f"RSI Sinyali: {rsi_signal}", transform=ax2.transAxes,
+         fontsize=12, ha='right', va='top',
+         bbox=dict(facecolor='green' if rsi_signal == 'AL' else 'red' if rsi_signal == 'SAT' else 'gray', alpha=0.5))
+
+st.pyplot(fig)
+
