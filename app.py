@@ -8,7 +8,6 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(layout="wide")
 st.title("📈 Hisse Sinyal Takibi: EMA, RSI, Anomali & Regresyon")
 
-# Kullanıcıdan hisse kodu al
 symbol = st.text_input("Hisse kodu giriniz (örn: XU100.IS)", value="XU100.IS")
 
 @st.cache_data(ttl=60)
@@ -18,6 +17,8 @@ def fetch_data(ticker):
         return None
     df = df[['Close', 'Volume']].dropna()
     df.index = pd.to_datetime(df.index)
+
+    # EMA ve RSI hesaplamaları
     df['EMA21'] = df['Close'].ewm(span=21, adjust=False).mean()
 
     delta = df['Close'].diff()
@@ -29,10 +30,13 @@ def fetch_data(ticker):
     df['RSI'] = 100 - (100 / (1 + rs))
     df['RSI_EMA9'] = df['RSI'].ewm(span=9, adjust=False).mean()
 
+    # NaN satırları temizle
+    df = df.dropna(subset=['Close', 'EMA21', 'RSI', 'RSI_EMA9'])
+
+    # Anomali algılama
     iso = IsolationForest(contamination=0.10, random_state=42)
     df['anomaly'] = iso.fit_predict(df[['Close']])
 
-    df = df.dropna(subset=['Close', 'EMA21', 'RSI', 'RSI_EMA9'])
     return df
 
 df = fetch_data(symbol)
@@ -104,6 +108,7 @@ ax2.text(0.99, 0.95, f"RSI Sinyali: {rsi_signal}", transform=ax2.transAxes,
          bbox=dict(facecolor='green' if rsi_signal == 'AL' else 'red', alpha=0.5))
 
 st.pyplot(fig)
+
 
 
 
