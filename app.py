@@ -8,6 +8,7 @@ from sklearn.linear_model import LinearRegression
 st.set_page_config(layout="wide")
 st.title("📈 Hisse Sinyal Takibi: EMA, RSI, Anomali & Regresyon")
 
+# Kullanıcıdan hisse kodu al
 symbol = st.text_input("Hisse kodu giriniz (örn: XU100.IS)", value="XU100.IS")
 
 @st.cache_data(ttl=60)
@@ -28,28 +29,28 @@ def fetch_data(ticker):
     df['RSI_EMA9'] = df['RSI'].ewm(span=9, adjust=False).mean()
     iso = IsolationForest(contamination=0.10, random_state=42)
     df['anomaly'] = iso.fit_predict(df[['Close']])
+    df = df.dropna(subset=['Close', 'EMA21', 'RSI', 'RSI_EMA9'])
     return df
 
 df = fetch_data(symbol)
 
-if df is None or df[['Close', 'EMA21', 'RSI', 'RSI_EMA9']].dropna().empty:
+if df is None or df.empty:
     st.warning("Yeterli veri yok veya EMA/RSI hesaplanamıyor. Lütfen farklı bir hisse deneyin.")
     st.stop()
 
-# Sinyal hesaplama (güvenli)
-close = df['Close'].iloc[-1]
-ema21 = df['EMA21'].iloc[-1]
-rsi = df['RSI'].iloc[-1]
-rsi_ema9 = df['RSI_EMA9'].iloc[-1]
+# Güvenli değer çekimi
+try:
+    close = float(df['Close'].iloc[-1])
+    ema21 = float(df['EMA21'].iloc[-1])
+    rsi = float(df['RSI'].iloc[-1])
+    rsi_ema9 = float(df['RSI_EMA9'].iloc[-1])
+except Exception as e:
+    st.error(f"Veri okunurken hata oluştu: {e}")
+    st.stop()
 
-ema_signal = "NO"
-rsi_signal = "NO"
-
-if pd.notna(close) and pd.notna(ema21):
-    ema_signal = "AL" if close < ema21 else "SAT"
-
-if pd.notna(rsi) and pd.notna(rsi_ema9):
-    rsi_signal = "AL" if rsi < rsi_ema9 else "SAT"
+# Sinyal üretimi
+ema_signal = "AL" if close < ema21 else "SAT"
+rsi_signal = "AL" if rsi < rsi_ema9 else "SAT"
 
 # Grafik çizimi
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
@@ -83,7 +84,7 @@ ax1.legend()
 ax1.grid(True)
 ax1.text(0.99, 0.95, f"EMA Sinyali: {ema_signal}", transform=ax1.transAxes,
          fontsize=12, ha='right', va='top',
-         bbox=dict(facecolor='green' if ema_signal == 'AL' else 'red' if ema_signal == 'SAT' else 'gray', alpha=0.5))
+         bbox=dict(facecolor='green' if ema_signal == 'AL' else 'red', alpha=0.5))
 
 # RSI grafiği
 ax2.plot(df.index, df['RSI'], label="RSI(14)", color="purple")
@@ -97,8 +98,9 @@ ax2.legend()
 ax2.grid(True)
 ax2.text(0.99, 0.95, f"RSI Sinyali: {rsi_signal}", transform=ax2.transAxes,
          fontsize=12, ha='right', va='top',
-         bbox=dict(facecolor='green' if rsi_signal == 'AL' else 'red' if rsi_signal == 'SAT' else 'gray', alpha=0.5))
+         bbox=dict(facecolor='green' if rsi_signal == 'AL' else 'red', alpha=0.5))
 
 st.pyplot(fig)
+
 
 
