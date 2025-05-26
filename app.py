@@ -1,5 +1,5 @@
-from streamlit_autorefresh import st_autorefresh
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -9,7 +9,10 @@ from sklearn.ensemble import IsolationForest
 import datetime
 
 st.set_page_config(layout="wide")
+st_autorefresh(interval=60 * 1000, key="datarefresh")  # <-- burası önemli!
 st.title("📈 Hisse Fiyatı: Regresyon Kanalı & Anomali Tespiti")
+
+
 
 symbol = st.text_input("Hisse kodu giriniz (örn: XU100.IS):", "XU100.IS")
 
