@@ -101,3 +101,4 @@ ax2.text(0.99, 0.95, f"RSI Sinyali: {rsi_signal}", transform=ax2.transAxes,
 
 st.pyplot(fig)
 
+
